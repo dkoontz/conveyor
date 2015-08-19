@@ -5,7 +5,7 @@
 	<Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
 	<ProductVersion>10.0.20506</ProductVersion>
 	<SchemaVersion>2.0</SchemaVersion>
-	<ProjectGuid>{8AE8C11B-DB72-CA0D-26AD-BEE15A853AFB}</ProjectGuid>
+	<ProjectGuid>{24C7FFF3-EE47-7B6C-13FC-31481B1C8BFD}</ProjectGuid>
 	<OutputType>Library</OutputType>
 	<AppDesignerFolder>Properties</AppDesignerFolder>
 	<RootNamespace></RootNamespace>
@@ -66,6 +66,12 @@
  <Reference Include="UnityEngine.Analytics">
  <HintPath>/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/UnityAnalytics/UnityEngine.Analytics.dll</HintPath>
  </Reference>
+ <Reference Include="udpkit">
+ <HintPath>/Users/david/dev/libs/conveyor/Assets/Libs/udpkit.dll</HintPath>
+ </Reference>
+ <Reference Include="udpkit.platform.managed">
+ <HintPath>/Users/david/dev/libs/conveyor/Assets/Libs/udpkit.platform.managed.dll</HintPath>
+ </Reference>
  <Reference Include="UnityEditor.Graphs">
  <HintPath>/Applications/Unity/Unity.app/Contents/Frameworks/Managed/UnityEditor.Graphs.dll</HintPath>
  </Reference>
@@ -96,19 +102,13 @@
  <Reference Include="UnityEditor.OSXStandalone.Extensions">
  <HintPath>/Applications/Unity/Unity.app/Contents/PlaybackEngines/MacStandaloneSupport/UnityEditor.OSXStandalone.Extensions.dll</HintPath>
  </Reference>
- <Reference Include="udpkit.platform.managed">
- <HintPath>/Users/david/dev/libs/conveyor/ConveyorUnityProject/Assets/Libs/udpkit.platform.managed.dll</HintPath>
- </Reference>
- <Reference Include="udpkit">
- <HintPath>/Users/david/dev/libs/conveyor/ConveyorUnityProject/Assets/Libs/udpkit.dll</HintPath>
- </Reference>
  <Reference Include="UnityEditor.iOS.Extensions.Xcode">
  <HintPath>/Applications/Unity/Unity.app/Contents/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
  </Reference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Assembly-CSharp-vs.csproj">
-      <Project>{2F7ED992-5759-6F68-24E8-4E1C4B987199}</Project>      <Name>Assembly-CSharp-vs</Name>    </ProjectReference>
+      <Project>{311E779B-823D-A699-47F3-EBE8AF6BE259}</Project>      <Name>Assembly-CSharp-vs</Name>    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

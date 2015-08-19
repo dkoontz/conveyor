@@ -288,14 +288,13 @@ namespace Conveyor
 				IsAuthenticationRequest = (conn, msg) => msg.Id == ClientToServerMessages.Login,
 				IsValidAuthentication = (conn, msg) => (msg.Data as LoginMessage).Authentication == Password,
 				MaxAuthorizationAttemptsExceeded = conn => false,
-				// TODO: Put back
-//				CreateMalformedMessageMessage = (conn, id) => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
-//				CreateUnknownMessageMessage = (conn, id) => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
-//				CreateServerFullMessage = (conn, msg) => new Message(ServerToClientMessages.ServerFull, null),
-//				CreateAuthenticationRequiredMessage = (conn, msg) => new Message(ServerToClientMessages.AuthenticationRequired, null),
-//				CreateInvalidAuthenticationMessage = (conn, msg) => new Message(ServerToClientMessages.InvalidAuthentication, null),
-//				CreateJoinedServerMessage = (conn, msg) => new Message(ServerToClientMessages.JoinedServer, new JoinedServerMessage(null)),
-//				CreateConnectedMessage = (conn, msg) => new Message(ServerToClientMessages.Connected, new ConnectedMessage(conn.Id)),
+				CreateMalformedMessageMessage = (conn, id) => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
+				CreateUnknownMessageMessage = (conn, id) => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
+				CreateServerFullMessage = (conn, msg) => new Message(ServerToClientMessages.ServerFull, null),
+				CreateAuthenticationRequiredMessage = (conn, msg) => new Message(ServerToClientMessages.AuthenticationRequired, null),
+				CreateInvalidAuthenticationMessage = (conn, msg) => new Message(ServerToClientMessages.InvalidAuthentication, null),
+				CreateJoinedServerMessage = (conn, msg) => new Message(ServerToClientMessages.JoinedServer, new JoinedServerMessage(null)),
+				CreateConnectedMessage = (conn, msg) => new Message(ServerToClientMessages.Connected, new ConnectedMessage(conn.Id)),
 				MessageHandlerIsNotRegistered = id => logger(LogType.Error, "No handler registered for message: " + id),
 				MessageSerializerIsNotRegistered = id => logger(LogType.Error, "No serializer registered for message: " + id),
 			};
@@ -309,9 +308,8 @@ namespace Conveyor
 				ConnectionRefusedByServer = endpoint => logger(LogType.Warning, "Connected refused by server: " + endpoint.Address + ":" + endpoint.Port),
 				FailedToConnectToServer = endpoint => logger(LogType.Warning, "Failed to connect to server: " + endpoint.Address + ":" + endpoint.Port),
 				LostConnectionToServer = endpoint => logger(LogType.Info, "Lost connection to server: " + endpoint.Address),
-				// TODO: Put back
-//				CreateMalformedMessageMessage = id => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
-//				CreateUnknownMessageMessage = id => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
+				CreateMalformedMessageMessage = id => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
+				CreateUnknownMessageMessage = id => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
 				MessageHandlerIsNotRegistered = id => logger(LogType.Error, "No handler registered for message: " + id),
 				MessageSerializerIsNotRegistered = id => logger(LogType.Error, "No serializer registered for message: " + id),
 			};
