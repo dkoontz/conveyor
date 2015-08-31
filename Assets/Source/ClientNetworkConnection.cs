@@ -45,7 +45,7 @@ namespace Conveyor
 		public void Disconnect()
 		{
 			QueueMessage(
-				new Message(ClientToServerMessages.Disconnect, null));
+				new Message(BuiltInClientToServerMessages.Disconnect, null));
 			SendPendingMessages();
 			socket.Close();
 		}
@@ -90,7 +90,7 @@ namespace Conveyor
 						break;
 					case UdpEventType.ObjectReceived:
 						var message = (DeserializedMessage)evt.Object;
-						if (ServerToClientMessages.InvalidMessage == message.Id)
+						if (BuiltInServerToClientMessages.InvalidMessage == message.Id)
 						{
 							QueueMessage(
 								functions.CreateUnknownMessageMessage(message.OriginalId));

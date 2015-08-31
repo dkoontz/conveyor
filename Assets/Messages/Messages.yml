@@ -1,0 +1,39 @@
+types:
+  -
+    name: ConnectedMessage
+    fields:
+      - Guid Id
+  -
+    name: JoinedServerMessage
+    fields:
+      - string Data
+  -
+    name: LoginMessage
+    fields:
+      - string UserId
+      - string Authentication
+  -
+    name: MalformedMessageMessage
+    fields:
+      - int MessageId
+  -
+    name: ReconnectMessage
+    fields:
+      - Guid OriginalId
+  -
+    name: ServerConfigurationMessage
+    fields:
+      - bool AuthenticationRequired
+      - int MaxNumberOfPlayers
+      - int CurrentNumberOfPlayers
+      - string CustomData
+  -
+    name: UnknownMessageMessage
+    fields:
+      - int MessageId
+
+custom_serializers:
+  -
+    type: Guid
+    serializer: GuidSerializer.Serializer
+    deserializer: GuidSerializer.Deserializer

@@ -10,7 +10,7 @@
 	<AppDesignerFolder>Properties</AppDesignerFolder>
 	<RootNamespace></RootNamespace>
 	<AssemblyName>Assembly-CSharp-Editor</AssemblyName>
-	<TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+	<TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
 	<FileAlignment>512</FileAlignment>
 	<BaseDirectory>Assets</BaseDirectory>
   </PropertyGroup>
@@ -46,10 +46,10 @@
 	</Reference>
   </ItemGroup>
   <ItemGroup>
-     <Compile Include="Assets\Editor\BuildUtils.cs" />
      <Compile Include="Assets\Editor\ConveyableGenerator.cs" />
      <Compile Include="Assets\Editor\ConveyorAutoBuild.cs" />
-     <None Include="Assets\conveyor_auto_generate_config.txt" />
+     <Compile Include="Assets\Editor\Pair.cs" />
+     <Compile Include="Assets\Editor\StripGeneratedSolutionSettings.cs" />
      <None Include="Assets\Source\Avro\Avro LICENSE.txt" />
  <Reference Include="UnityEngine.UI">
  <HintPath>/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>

@@ -4,67 +4,146 @@ using System.IO;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Conveyor
 {
+	class AutoBuildConfig
+	{
+		public string Messages { get; set; }
+		public string Generated { get; set; }
+		public string Namespace { get; set; }
+	}
+
 	public class ConveyorAutoBuild : AssetPostprocessor  
 	{
+		const string AUTO_BUILD_CONFIG = "conveyor_auto_generate_config.yml";
+
 		static void OnPostprocessAllAssets(
 			string[] importedAssets,
 			string[] deletedAssets,
 			string[] movedAssets,
 			string[] movedFromAssetPaths) 
 		{
-			var paths = GetPaths();
-			var messagePath = paths.First;
-			var generatedPath = paths.Second;
+			var config = GetConfig();
 
-			CreateDirectoriesIfMissing(messagePath, generatedPath);
+			CreateDirectoriesIfMissing(config.Messages, config.Generated);
 
-			var messagePathWithAssets = "Assets/" + messagePath;
-//			var generatedPathWithAssets = "Assets/" + generatedPath;
+			var messagePathWithAssets = "Assets/" + config.Messages;
+			var generatedPathWithAssets = "Assets/" + config.Generated;
 
-			var fullMessagePath = Application.dataPath + "/" + messagePath;
-			var fullGeneratedPath = Application.dataPath + "/" + generatedPath;
+			var fullMessagePath = Application.dataPath + "/" + config.Messages;
+			var fullGeneratedPath = Application.dataPath + "/" + config.Generated;
 
-			var filesWithErrors = new List<string>();
 			foreach (string str in importedAssets)
 			{
-//				Debug.Log("Reimported Asset: " + str);
 				string[] splitStr = str.Split('/');
-				
+
 				string folder = string.Join("/", splitStr.Take(splitStr.Length - 1).ToArray());
 				string fileName = splitStr.Last();
-//				string extension = splitStr[2];
-
 //				Debug.Log("folder: " + folder);
 //				Debug.Log("full:   " + fullMessagePath);
 				if (folder == messagePathWithAssets)
 				{
-					var sourceFile = fullMessagePath + "/" + fileName;
-					var destinationFile = fullGeneratedPath + "/" + fileName;
+					var messageDefinitionsArray = Directory
+						.GetFiles(messagePathWithAssets, "*.yml")
+						.Select(f => f.Replace("Assets/", ""))
+						.Select(
+							file => {
+								try
+								{
+									var messageDefinitionFile = string.Format ("{0}/{1}", Application.dataPath, file);
+									var reader = new StreamReader(messageDefinitionFile);
+									var deserializer = new Deserializer(namingConvention: new UnderscoredNamingConvention());
+									var definitions = deserializer.Deserialize<UnprocessedMessageDefinitions>(reader);
+									definitions.OriginalFileModifiedTime = File.GetLastWriteTimeUtc(messageDefinitionFile);
+
+									return Either<Pair<string, Exception>, UnprocessedMessageDefinitions>.Right(definitions);
+								}
+								catch (Exception ex)
+								{
+									return Either<Pair<string, Exception>, UnprocessedMessageDefinitions>.Left(
+										new Pair<string, Exception>(file, ex));
+								}
+							})
+						.Where(e => e.IsLeft || (e.IsRight && e.RightValue != null))
+						.ToArray();
+
+					if (messageDefinitionsArray.Any(e => e.IsLeft))
+					{
+						Debug.LogError(
+							"Error parsing the following message files: " + 
+							string.Join(
+								", ", 
+								messageDefinitionsArray
+									.Where(e => e.IsLeft)
+									.Select(e => e.LeftValue.First + "\n" + e.LeftValue.Second.Message + "\n" + e.LeftValue.Second.StackTrace)
+									.ToArray()));
+					}
+					else
+					{
+						var messageDefinitions = 
+							new MessageDefinitions
+							{
+								Types = messageDefinitionsArray
+									.Where(e => e.RightValue.Types != null)
+									.SelectMany(e => ProcessMessageDefinition(e.RightValue.Types, e.RightValue.OriginalFileModifiedTime))
+									.ToArray(),
+								EnumTypes = messageDefinitionsArray
+									.Where(e => e.RightValue.EnumTypes != null)
+									.SelectMany(e => e.RightValue.EnumTypes)
+									.ToArray(),
+								CustomSerializers = messageDefinitionsArray
+									.Where(e => e.RightValue.CustomSerializers != null)
+									.SelectMany(e => e.RightValue.CustomSerializers)
+									.ToArray()
+							};
+
+
+						foreach (var type in messageDefinitions.Types)
+						{
+							var outputFile = string.Format("{0}/{1}.cs", generatedPathWithAssets, type.Name);
+
+							if (File.GetLastWriteTimeUtc(outputFile) < type.DefinitionModifiedTime)
+							{
+								try
+								{
+									var generatedCode = ClassGenerator.Generate(type, messageDefinitions, config.Namespace);
+									
+									File.WriteAllText(
+										outputFile,
+										string.Format(
+											"{0}{1}\n\n{2}",
+											ClassGenerator.REQUIRED_IMPORTS,
+											string.Join(
+												"\n",
+												(type.AdditionalImports ?? new string[0])
+												.Select(t => string.Format("using {0};", t))
+												.ToArray()),
+											generatedCode));
+									Debug.Log("Generated class for " + type.Name);
+								}
+								catch (Exception ex)
+								{
+									Debug.LogError(
+										string.Format(
+											"Failed to generate file for {0}\n{1}\n{2}", 
+											type, 
+											ex.Message, 
+											ex.StackTrace));
+								}
+							}
+						}
+					}
+
+//					var sourceFile = fullMessagePath + "/" + fileName;
+//					var destinationFile = fullGeneratedPath + "/" + fileName;
 //					Debug.Log("Directory: " + folder);
 //					Debug.Log("File name: " + fileName);
 //					Debug.Log("source file: " + File.GetLastWriteTimeUtc(sourceFile));
 //					Debug.Log("dest   file: " + File.GetLastWriteTimeUtc(destinationFile));
 //					Debug.Log("difference: " + File.GetLastWriteTimeUtc(sourceFile).CompareTo(File.GetLastWriteTimeUtc(destinationFile)));
-					var error = BuildUtils.GenerateFileContents(sourceFile, destinationFile, "Assembly-CSharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
-					if (!string.IsNullOrEmpty(error))
-					{
-						filesWithErrors.Add(error);
-					}
-				}
-//				Debug.Log("File type: " + extension);             
-				// for each file in messages, check if there is a file in generated that is older or non-existant
-//				if (folder)
-			}
-
-			if (filesWithErrors.Count > 0)
-			{
-				Debug.LogError("There were errors generating some files");
-				foreach (var file in filesWithErrors)
-				{
-					Debug.LogError(file);
 				}
 			}
 
@@ -92,44 +171,66 @@ namespace Conveyor
 			}
 		}
 
-		static Pair<string, string> GetPaths()
+		static AutoBuildConfig GetConfig()
 		{
-			var configFilePath = Application.dataPath + "/conveyor_auto_generate_config.txt";
-			string[] lines =
-				{
-					"Messages:Network/Messages",
-					"Generated:Network/GeneratedMessages"
-				};
+			var configFilePath = string.Format("{0}/{1}", Application.dataPath, AUTO_BUILD_CONFIG);
+			return !File.Exists(configFilePath)
+				? CreateDefaultConfig(configFilePath)
+				: ReadExistingConfig(configFilePath);
+		}
 
-			if (!File.Exists(configFilePath))
+		static AutoBuildConfig CreateDefaultConfig(string configFilePath)
+		{
+			var config = new AutoBuildConfig 
 			{
-				using (var writer = new StreamWriter(configFilePath))
-				{
-					writer.WriteLine(lines[0]);
-					writer.WriteLine(lines[1]);
-					writer.Close();
-				}
-			}
-			else
-			{
-				lines = File.ReadAllLines(configFilePath);
-			}
+				Messages = "Network/Messages",
+				Generated = "Network/Generated",
+				Namespace = "YourNamespace"
+			};
 
-			if (lines.Length < 2)
+			var serializer = new Serializer(namingConvention: new CamelCaseNamingConvention());
+			using (var writer = new StreamWriter(configFilePath))
 			{
-				throw new Exception(BuildUtils.MALFORMED_ERROR_MESSAGE);
+				serializer.Serialize(writer, config, typeof(AutoBuildConfig));
 			}
+			AssetDatabase.Refresh();
+			return config;
+		}
 
-			try
+		static AutoBuildConfig ReadExistingConfig (string configFilePath)
+		{
+			var reader = new StreamReader(configFilePath);
+			var deserializer = new Deserializer(namingConvention: new CamelCaseNamingConvention());
+			return deserializer.Deserialize<AutoBuildConfig>(reader);
+		}
+
+		static Field StringToField(string fieldString)
+		{
+			var parts = fieldString.Split(' ');
+			return new Field
 			{
-				var source = lines[0].Split(':')[1];
-				var destination = lines[1].Split(':')[1];
-				return new Pair<string, string>(source, destination);
-			}
-			catch
-			{
-				throw new Exception(BuildUtils.MALFORMED_ERROR_MESSAGE);
-			}
+				Type = parts[0],
+				Name = parts[1]
+			};
+		}
+
+		static MessageDefinition[] ProcessMessageDefinition(UnprocessedMessageDefinition[] unproccessedDefinitions, DateTime originalModifiedTime)
+		{
+			return unproccessedDefinitions
+				.Select(
+					definition =>
+						new MessageDefinition
+						{
+							Name = definition.Name,
+							Fields = definition
+								.Fields
+								.Select(f => StringToField(f))
+								.ToArray(),
+							AdditionalImports = definition.AdditionalImports,
+							DefinitionModifiedTime = originalModifiedTime,
+						}
+					)
+				.ToArray();
 		}
 	}
 }

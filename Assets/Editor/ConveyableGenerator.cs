@@ -4,136 +4,182 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Avro.IO;
+using UnityEditor;
+using System.IO;
+using UnityEngine;
+using YamlDotNet.Core;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Conveyor
 {
-	public static class PartialClassGenerator
+	internal class UnprocessedMessageDefinitions
+	{
+		public UnprocessedMessageDefinition[] Types { get; set; }
+		public string[] EnumTypes { get; set; }
+		public CustomSerializer[] CustomSerializers { get; set; }
+		public DateTime OriginalFileModifiedTime;
+	}
+
+	internal class UnprocessedMessageDefinition
+	{
+		public string Name { get; set; }
+		public string[] Fields { get; set; }
+		public string[] AdditionalImports { get; set; }
+	}
+
+	public class CustomSerializer
+	{
+		public string Type { get; set; }
+		public string Serializer { get; set; }
+		public string Deserializer { get; set; }
+	}
+
+	public class MessageDefinitions
+	{
+		public MessageDefinition[] Types { get; set; }
+		public string[] EnumTypes { get; set; }
+		public CustomSerializer[] CustomSerializers { get; set; }
+	}
+
+	public class MessageDefinition
+	{
+		public string Name;
+		public Field[] Fields;
+		public string[] AdditionalImports;
+		public DateTime DefinitionModifiedTime;
+	}
+
+	public class Field
+	{
+		public string Type;
+		public string Name;
+	}
+
+	public static class ClassGenerator
 	{
 		public const string REQUIRED_IMPORTS = "using System;\nusing System.IO;\nusing System.Collections.Generic;\nusing Avro.IO;\nusing Conveyor;\n";
 
-		// Generates the implementation for a Conveyable partial class.
-		// The input type must have the [Conveyable] attribute and one or more
-		// public properties with a getter and private setter.
+		[MenuItem("Assets/Create/Conveyor Message", false, 10)]
+		public static void CreateMessageFile()
+		{
+			var path = "Assets";
+			foreach (UnityEngine.Object obj in Selection.GetFiltered(typeof(UnityEngine.Object), SelectionMode.Assets))
+			{
+				path = AssetDatabase.GetAssetPath(obj);
+				if (File.Exists(path))
+				{
+					path = Path.GetDirectoryName(path);
+				}
+				break;
+			}
+
+			using (var f = File.CreateText(AssetDatabase.GenerateUniqueAssetPath(path + "/Messages.yml")))
+			{
+				f.WriteLine ("types:");
+				f.WriteLine ("\t-");
+				f.WriteLine ("\t\tname: Message1Name");
+				f.WriteLine ("\t\tfields:");
+				f.WriteLine ("\t\t\t- type1 Field1Name");
+				f.WriteLine ("\t\t\t- type2 Field2Name");
+				f.WriteLine ("\t\tadditional_imports:");
+				f.WriteLine ("\t\t\t- SomeNameSpace");
+				f.WriteLine ("\t-");
+				f.WriteLine ("\t\tname: Message2Name");
+				f.WriteLine ("\t\tfields:");
+				f.WriteLine ("\t\t\t- type3 Field1Name");
+				f.WriteLine ("enum_types:");
+				f.WriteLine ("\t- FirstEnumType");
+				f.WriteLine ("\t- SecondEnumType");
+				f.WriteLine ("custom_serializers:");
+				f.WriteLine ("\t-");
+				f.WriteLine ("\t\ttype: FooType");
+				f.WriteLine ("\t\tserializer: NamespaceIfDifferent.ClassName.Serializer");
+				f.WriteLine ("\t\tdeserializer: NamespaceIfDifferent.ClassName.Deserializer");
+			}
+
+			AssetDatabase.Refresh();
+		}
+
+		// Generates the implementation of a Conveyable class.
 		//
 		// Conveyor will generate the constuctor as well as WithXYZ functions
 		// that create a new copy of the type with one of the fields changed.
 		//
 		// Conveyor also generates a Serialize and Deserialize static function
 		// pair to be used when writing to / reading from a byte[]
-		public static string Generate(Type type)
+		public static string Generate(MessageDefinition type, MessageDefinitions definitions, string classNamespace)
 		{
-			if (type == null)
-			{
-				throw new ArgumentException("Type is null", "type");
-			}
-			if (!type.GetCustomAttributes(false).Any(a => a is ConveyableAttribute))
-			{
-				throw new ArgumentException(string.Format("Class does not have [{0}] attribute", typeof(ConveyableAttribute)));
-			}
-
-			var properties = type
-				.GetProperties(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-				.ToArray();
-
-			if (properties.Length == 0)
-			{
-				throw new ArgumentException(string.Format("Class {0} does not have any public Properties with public getter and private setter", type.FullName));
-			}
-
-			var invalidProperties = properties
-				.Where(p =>
-					!p.CanRead
-					|| !p.GetGetMethod(true).IsPublic
-					|| !p.CanWrite
-					|| !p.GetSetMethod(true).IsPrivate)
-				.ToArray();
-
-			if (invalidProperties.Any())
-			{
-				throw new ArgumentException(
-					string.Format(
-						"Class {0} contains the following invalid properties: [{1}]. Properties must have a public getter and private setter",
-						type.FullName,
-						string.Join(", ", invalidProperties.Select(p => p.Name).ToArray())));
-			}
-
 			var output = new StringBuilder();
 			Action<string> appendWithTwoTabs = str => output.AppendLine("\t\t" + str);
 
-			output.AppendLine(string.Format("namespace {0}", type.Namespace));
-			output.AppendLine("{"); {
-				output.AppendLine(string.Format("\tpublic partial class {0} : {1}", type.Name, typeof(IConveyable).Name));
-				output.AppendLine("\t{");
-//				GenerateSchema(properties, appendWithTwoTabs);
-				GenerateConstructor(type.Name, properties, appendWithTwoTabs);
-				GenerateModifierFunctions(type.Name, properties, appendWithTwoTabs);
-				GenerateSerializerAndDeserializer(type.Name, properties, appendWithTwoTabs);
-				output.AppendLine("\t}");
-			} output.AppendLine("}");
+			output.AppendLine(string.Format("namespace {0}", classNamespace));
+			output.AppendLine("{");
+			output.AppendLine(string.Format("\tpublic class {0} : {1}", type.Name, typeof(IConveyable).Name));
+			output.AppendLine("\t{");
+			GenerateFields(type.Fields, appendWithTwoTabs);
+			GenerateConstructor(type.Name, type.Fields, definitions, appendWithTwoTabs);
+			GenerateModifierFunctions(type.Name, type.Fields, definitions, appendWithTwoTabs);
+			GenerateSerializerAndDeserializer(type.Name, type.Fields, definitions, appendWithTwoTabs);
+			output.AppendLine("\t}");
+			output.AppendLine("}");
 
 			return output.ToString();
 		}
 
-//		static void GenerateSchema(PropertyInfo[] properties, Action<string> writer)
-//		{
-//			writer("public static readonly Dictionary<string, Type> SCHEMA = ");
-//			writer("\tnew Dictionary<string, Type>");
-//			writer("\t{");
-//
-//			foreach (var property in properties)
-//			{
-//				writer(string.Format("\t\t{{ \"{0}\", typeof({1}) }},", property.Name, property.PropertyType));
-//			}
-//			writer("\t};");
-//		}
-
-		static void GenerateConstructor(string typeName, PropertyInfo[] properties, Action<string> writer)
+		static void GenerateFields(Field[] fields, Action<string> writer)
 		{
-			var propertyParameters =
-				properties.Select(p =>
-					{
-						return IsList(p.PropertyType)
-							? string.Format("List<{0}> {1}", listElementType(p.PropertyType).FullName.Replace('+', '.'), p.Name)
-							: string.Format("{0} {1}", p.PropertyType.FullName.Replace('+', '.'), p.Name);
-					})
-					.ToArray();
-
 			writer("");
-			writer(string.Format("public {0}({1})", typeName, string.Join(", ", propertyParameters)));
+			foreach (var field in fields)
+			{
+				writer(string.Format("public readonly {0} {1};", field.Type, field.Name));
+			}
+		}
+
+		static void GenerateConstructor(string typeName, Field[] fields, MessageDefinitions definitions, Action<string> writer)
+		{
+			writer("");
+			writer(
+				string.Format(
+					"public {0}({1})", 
+					typeName, 
+					string.Join(
+						", ", 
+						fields
+							.Select(field => string.Format("{0} {1}", field.Type, field.Name))
+							.ToArray())));
 
 			writer("{");
-			foreach (var property in properties)
+			foreach (var field in fields)
 			{
-				writer(string.Format("\tthis.{0} = {0};", property.Name));
+				writer(string.Format("\tthis.{0} = {0};", field.Name));
 			}
 
 			writer("}");
 		}
 
-		static void GenerateModifierFunctions(string typeName, PropertyInfo[] properties, Action<string> writer)
+		static void GenerateModifierFunctions(string typeName, Field[] fields, MessageDefinitions definitions, Action<string> writer)
 		{
-			var propertyNames = properties.Select(p => p.Name).ToArray();
-			for (var i = 0; i < properties.Length; ++i)
+			var fieldNames = fields.Select(f => f.Name).ToArray();
+			for (var i = 0; i < fields.Length; ++i)
 			{
-				var property = properties[i];
+				var field = fields[i];
 
 				writer("");
 				writer(
 					string.Format(
 						"public {0} With{1}({2} newValue)",
 						typeName,
-						property.Name,
-						IsList(property.PropertyType)
-						? string.Format("List<{0}>", listElementType(property.PropertyType).FullName.Replace('+', '.'))
-						: property.PropertyType.FullName.Replace('+', '.')
+						field.Name,
+						field.Type
 					));
 				writer("{");
 
 				var parameters = string.Join(
 					", ",
-					propertyNames.Select(
+					fieldNames.Select(
 						name =>
-						Array.IndexOf(propertyNames, name) == i
+						Array.IndexOf(fieldNames, name) == i
 						? "newValue"
 						: name)
 					.ToArray());
@@ -142,36 +188,69 @@ namespace Conveyor
 			}
 		}
 
-		static readonly Func<Type, Type> arrayElementType = t => t.GetElementType();
-		static readonly Func<Type, Type> listElementType = t => t.GetGenericArguments()[0];
-		static void GenerateSerializerAndDeserializer(string className, PropertyInfo[] properties, Action<string> writer)
+		static void GenerateSerializerAndDeserializer(string className, Field[] fields, MessageDefinitions definitions, Action<string> writer)
 		{
 			const string localObjectName = "obj";
 			const string localDecoderName = "decoder";
 			const string localEncoderName = "encoder";
 
 			writer("");
+			writer("public static MessageSerializers Serializers");
+			writer("{");
+			writer("\tget");
+			writer("\t{");
+			writer("\t\treturn new MessageSerializers(");
+			writer("\t\t\tSerialize,");
+			writer("\t\t\tDeserialize);");
+			writer("\t}");
+			writer("}");
+			writer("");
+
 			writer(string.Format("public static void Serialize({0} data, BinaryEncoder {1})", typeof(IConveyable).Name, localEncoderName));
 			writer("{");
 			writer(string.Format("\t{0} {1} = ({0})data;", className, localObjectName));
 
-			foreach (var property in properties)
+			foreach (var field in fields)
 			{
 				writer("");
-				var type = property.PropertyType;
-				var propertyName = localObjectName + "." + property.Name;
-
-				if (type.IsArray)
+				if (IsArray(field.Type))
 				{
-					WriteCollection(writer, type, propertyName, localEncoderName, "Length", arrayElementType);
+					WriteCollection(
+						writer, 
+						field.Type, 
+						localObjectName + "." + field.Name, 
+						localEncoderName, 
+						"Length", 
+						ArrayElementType(field.Type),
+						definitions.Types, 
+						definitions.EnumTypes, 
+						definitions.CustomSerializers);
 				}
-				else if (IsList(type))
+				else if (IsList(field.Type))
 				{
-					WriteCollection(writer, type, propertyName, localEncoderName, "Count", listElementType);
+					WriteCollection(
+						writer, 
+						field.Type, 
+						localObjectName + "." + field.Name, 
+						localEncoderName, 
+						"Count", 
+						ListElementType(field.Type),
+						definitions.Types, 
+						definitions.EnumTypes, 
+						definitions.CustomSerializers);
 				}
 				else
 				{
-					writer(string.Format("\t{0};", TypeToWriter(type, propertyName, localEncoderName)));
+					writer(
+						string.Format(
+							"\t{0};", 
+							TypeToWriter(
+								field.Type, 
+								localObjectName + "." + field.Name, 
+								localEncoderName, 
+								definitions.Types, 
+								definitions.EnumTypes, 
+								definitions.CustomSerializers)));
 				}
 			}
 
@@ -181,230 +260,274 @@ namespace Conveyor
 			writer(string.Format("public static {0} Deserialize(BinaryDecoder {1})", className, localDecoderName));
 			writer("{");
 
-			for (var i = 0; i < properties.Length; ++i)
+			for (var i = 0; i < fields.Length; ++i)
 			{
-				var property = properties[i];
-				var type = property.PropertyType;
-
+				var field = fields[i];
 				writer("");
 
-				if (type.IsArray)
+				if (IsArray(field.Type))
 				{
-					writer(string.Format("\t{0} property{1};", type.FullName.Replace('+', '.'), i));
+					writer(string.Format("\t{0} field{1};", field.Type, i));
 					writer("\t{");
 					ReadCollection(
-						writer,
-						type,
+						str => writer("\t" + str),
+						field.Type,
 						localDecoderName,
 						(indexName, reader) => string.Format("[{0}] = {1}", indexName, reader),
-						(t, length) =>
-						{
-							var fullName = t.FullName.Replace('+', '.');
-							return string.Format(
-								"new {0}{1}]",
-								fullName.Substring(0, fullName.Length - 1),
-								length);
-						},
-						arrayElementType);
-					writer(string.Format("\tproperty{0} = collection;", i));
+						(t, length) => string.Format("new {0}{1}]", t.Substring(0, t.Length - 1), length),
+						ArrayElementType(field.Type),
+						definitions.Types, 
+						definitions.EnumTypes, 
+						definitions.CustomSerializers);
+					writer(string.Format("\t\tfield{0} = collection;", i));
 					writer("\t}");
 				}
-				else if (IsList(type))
+				else if (IsList(field.Type))
 				{
-					writer(string.Format("\tList<{0}> property{1};", listElementType(type).FullName.Replace('+', '.'), i));
+					writer(string.Format("\t{0} field{1};", field.Type, i));
 					writer("\t{");
 					ReadCollection(
-						writer,
-						type,
+						str => writer("\t" + str),
+						field.Type,
 						localDecoderName,
 						(indexName, reader) => string.Format(".Add({0})", reader),
-						(t, length) => string.Format("new List<{0}>({1})", listElementType(t).FullName.Replace('+', '.'), length),
-						listElementType);
-					writer(string.Format("\tproperty{0} = collection;", i));
+						(t, length) => string.Format("new {0}({1})", t, length),
+						ListElementType(field.Type),
+						definitions.Types, 
+						definitions.EnumTypes, 
+						definitions.CustomSerializers);
+					writer(string.Format("\t\tfield{0} = collection;", i));
 					writer("\t}");
-					//				ReadCollection(writer, type, propertyName, localEncoderName, "Count", t => t.GetGenericArguments()[0]);
 				}
 				else
 				{
-					writer(string.Format("\t{0} property{1} = {2};", type.FullName.Replace('+', '.'), i, TypeToReader(type, localDecoderName)));
+					writer(
+						string.Format(
+							"\t{0} field{1} = {2};", 
+							field.Type, 
+							i, 
+							TypeToReader(
+								field.Type, 
+								localDecoderName,
+								definitions.Types, 
+								definitions.EnumTypes, 
+								definitions.CustomSerializers)));
 				}
 			}
 
 			writer("");
 			writer(string.Format("\treturn new {0}(", className));
-			for (var i = 0; i < properties.Length; ++i)
+			for (var i = 0; i < fields.Length; ++i)
 			{
 				writer(
 					string.Format(
-						"\t\tproperty{0}{1}",
+						"\t\tfield{0}{1}",
 						i,
-						i < properties.Length - 1
+						i < fields.Length - 1
 						? ","
 						: ");"));
 			}
 			writer("}");
 		}
 
-		static string TypeToReader(Type type, string decoderName)
+		static string TypeToReader(
+			string type, 
+			string decoderName,
+			MessageDefinition[] messages,
+			string[] enumTypes, 
+			CustomSerializer[] customSerializers)
 		{
-			if (typeof(bool) == type)
+			if ("bool" == type)
 			{
 				return string.Format("{0}.ReadBoolean()", decoderName);
 			}
-			else if (typeof(byte[]) == type)
-			{
-				return string.Format("{0}.ReadBytes()", decoderName);
-			}
-			else if (typeof(double) == type)
+			else if ("double" == type)
 			{
 				return string.Format("{0}.ReadDouble()", decoderName);
 			}
-			else if (typeof(Enum).IsAssignableFrom(type))
+			else if (enumTypes.Contains(type))
 			{
-				return string.Format("({0}){1}.ReadEnum()", type.FullName.Replace('+', '.'), decoderName);
+				return string.Format("({0}){1}.ReadEnum()", type, decoderName);
 			}
-			else if (typeof(float) == type)
+			else if ("float" == type)
 			{
 				return string.Format("{0}.ReadFloat()", decoderName);
 			}
-			else if (typeof(int) == type)
+			else if ("int" == type)
 			{
 				return string.Format("{0}.ReadInt()", decoderName);
 			}
-			else if (typeof(long) == type)
+			else if ("long" == type)
 			{
 				return string.Format("{0}.ReadLong()", decoderName);
 			}
-			else if (typeof(string) == type)
+			else if ("string" == type)
 			{
 				return string.Format("{0}.ReadString()", decoderName);
 			}
-			else if (type.GetCustomAttributes(false).Any(attr => attr.GetType().IsAssignableFrom(typeof(ConveyableAttribute))))
+			else if (messages.Any(m => m.Name == type))
 			{
-				return string.Format("{0}.Deserialize({1})", type.Name, decoderName);
+				return string.Format("{0}.Deserialize({1})", type, decoderName);
 			}
 			else
 			{
-				var deserializer = GetDeserializerFor(type);
-				if (deserializer != null)
+				var custom = customSerializers.FirstOrDefault(s => s.Type == type);
+				if (custom != null)
 				{
-					Console.WriteLine("found deserializer: " + deserializer.Name);
-					return string.Format("{0}.{1}({2})", deserializer.DeclaringType.FullName, deserializer.Name, decoderName);
+					Console.WriteLine("found deserializer: " + custom.Deserializer);
+					return string.Format("{0}({1})", custom.Deserializer, decoderName);
 				}
 				else
 				{
-					throw new NotImplementedException(string.Format("No serializers of the type \"public static {0} Deserializer(BinaryDecoder decoder)\" could be found, perhaps you are missing the [{1}] attribute?", type, typeof(ConveyorDeserializerAttribute).Name));
+					throw new NotImplementedException(string.Format("No serializers of the type \"public static {0} Deserializer(BinaryDecoder decoder)\" could be found", type));
 				}
 			}
 		}
 
-		static string TypeToWriter(Type type, string property, string encoderName)
+		static string TypeToWriter(
+			string type, 
+			string field, 
+			string encoderName, 
+			MessageDefinition[] messages,
+			string[] enumTypes, 
+			CustomSerializer[] customSerializers)
 		{
-			if (typeof(bool) == type)
+			if ("bool" == type)
 			{
-				return string.Format("{0}.WriteBoolean({1})", encoderName, property);
+				return string.Format("{0}.WriteBoolean({1})", encoderName, field);
 			}
-			else if (typeof(byte[]) == type)
+			else if ("double" == type)
 			{
-				return string.Format("{0}.WriteBytes({1})", encoderName, property);
+				return string.Format("{0}.WriteDouble({1})", encoderName, field);
 			}
-			else if (typeof(double) == type)
+			else if (enumTypes.Contains(type))
 			{
-				return string.Format("{0}.WriteDouble({1})", encoderName, property);
+				return string.Format("{0}.WriteEnum((int){1})", encoderName, field);
 			}
-			else if (typeof(Enum).IsAssignableFrom(type))
+			else if ("float" == type)
 			{
-				return string.Format("{0}.WriteEnum((int){1})", encoderName, property);
+				return string.Format("{0}.WriteFloat({1})", encoderName, field);
 			}
-			else if (typeof(float) == type)
+			else if ("int" == type)
 			{
-				return string.Format("{0}.WriteFloat({1})", encoderName, property);
+				return string.Format("{0}.WriteInt({1})", encoderName, field);
 			}
-			else if (typeof(int) == type)
+			else if ("long" == type)
 			{
-				return string.Format("{0}.WriteInt({1})", encoderName, property);
+				return string.Format("{0}.WriteLong({1})", encoderName, field);
 			}
-			else if (typeof(long) == type)
+			else if ("string" == type)
 			{
-				return string.Format("{0}.WriteLong({1})", encoderName, property);
+				return string.Format("{0}.WriteString({1})", encoderName, field);
 			}
-			else if (typeof(string) == type)
+			else if (messages.Any(m => m.Name == type))
 			{
-				return string.Format("{0}.WriteString({1})", encoderName, property);
-			}
-			else if (type.GetCustomAttributes(false).Any(attr => attr.GetType().IsAssignableFrom(typeof(ConveyableAttribute))))
-			{
-				return string.Format("{0}.Serialize({1}, {2})", type.Name, property, encoderName);
+				return string.Format("{0}.Serialize({1}, {2})", type, field, encoderName);
 			}
 			else
 			{
-				var serializer = GetSerializerFor(type);
-				if (serializer != null)
+				var custom = customSerializers.FirstOrDefault(s => s.Type == type);
+				if (custom != null)
 				{
-					Console.WriteLine("found serializer: " + serializer.Name);
-					return string.Format("{0}.{1}({2}, {3})", serializer.DeclaringType.FullName, serializer.Name, property, encoderName);
+					Console.WriteLine("found serializer: " + custom.Serializer);
+					return string.Format("{0}({1}, {2})", custom.Serializer, field, encoderName);
 				}
 				else
 				{
-					throw new NotImplementedException(string.Format("No serializer of the type \"public static void Serializer({0} data, BinaryEncoder encoder)\" could be found, perhaps you are missing the [{1}] attribute?", type, typeof(ConveyorSerializerAttribute).Name));
+					throw new NotImplementedException(string.Format("No serializer of the type \"public static void Serializer({0} data, BinaryEncoder encoder)\" was registered", type));
 				}
 			}
 		}
+//
+//		static MethodInfo GetDeserializerFor(Type type)
+//		{
+//			var deserializers = AppDomain.CurrentDomain
+//				.GetAssemblies()
+//				.SelectMany(
+//					assembly => assembly
+//					.GetTypes()
+//					.SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
+//					.Where(m => m.GetCustomAttributes(false).Any(a => a is ConveyorDeserializerAttribute)));
+//
+//			return deserializers.FirstOrDefault(m =>
+//				m.ReturnParameter.ParameterType == type
+//				&& m.GetParameters().Length == 1
+//				&& m.GetParameters()[0].ParameterType == typeof(BinaryDecoder));
+//		}
+//
+//		static MethodInfo GetSerializerFor(Type type)
+//		{
+//			var deserializers = AppDomain.CurrentDomain
+//				.GetAssemblies()
+//				.SelectMany(
+//					assembly => assembly
+//					.GetTypes()
+//					.SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
+//					.Where(m => m.GetCustomAttributes(false).Any(a => a is ConveyorSerializerAttribute)));
+//
+//			return deserializers.FirstOrDefault(m =>
+//				m.ReturnParameter.ParameterType == typeof(void)
+//				&& m.GetParameters().Length == 2
+//				&& m.GetParameters()[0].ParameterType == type
+//				&& m.GetParameters()[1].ParameterType == typeof(BinaryEncoder));
+//		}
 
-		static MethodInfo GetDeserializerFor(Type type)
+		public static bool IsArray(string typeName)
 		{
-			var deserializers = AppDomain.CurrentDomain
-				.GetAssemblies()
-				.SelectMany(
-					assembly => assembly
-					.GetTypes()
-					.SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
-					.Where(m => m.GetCustomAttributes(false).Any(a => a is ConveyorDeserializerAttribute)));
-
-			return deserializers.FirstOrDefault(m =>
-				m.ReturnParameter.ParameterType == type
-				&& m.GetParameters().Length == 1
-				&& m.GetParameters()[0].ParameterType == typeof(BinaryDecoder));
+			return typeName.EndsWith("]");
 		}
 
-		static MethodInfo GetSerializerFor(Type type)
+		public static bool IsList(string typeName)
 		{
-			var deserializers = AppDomain.CurrentDomain
-				.GetAssemblies()
-				.SelectMany(
-					assembly => assembly
-					.GetTypes()
-					.SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
-					.Where(m => m.GetCustomAttributes(false).Any(a => a is ConveyorSerializerAttribute)));
-
-			return deserializers.FirstOrDefault(m =>
-				m.ReturnParameter.ParameterType == typeof(void)
-				&& m.GetParameters().Length == 2
-				&& m.GetParameters()[0].ParameterType == type
-				&& m.GetParameters()[1].ParameterType == typeof(BinaryEncoder));
+			return typeName.Contains("List<");
 		}
 
-		static bool IsList(Type type)
+		public static string ArrayElementType(string type)
 		{
-			return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>);
+			var bracketIndex = type.IndexOf("[");
+			return type.Substring(0, bracketIndex);
 		}
 
-		static void WriteCollection(Action<string> writer, Type type, string propertyName, string localEncoderName, string lengthPropertyName, Func<Type, Type> elementType)
+		public static string ListElementType (string type)
 		{
-			writer(string.Format("\t{0}.WriteInt({1}.{2});", localEncoderName, propertyName, lengthPropertyName));
-			writer(string.Format("\tfor (var i = 0; i < {0}.{1}; ++i)", propertyName, lengthPropertyName));
+			var angleBracketIndex = type.IndexOf("<");
+			return type.Substring(angleBracketIndex + 1, type.Length - angleBracketIndex - 2);
+		}
+
+		static void WriteCollection(
+			Action<string> writer, 
+			string typeName, 
+			string fieldName, 
+			string localEncoderName, 
+			string lengthPropertyName, 
+			string elementType,
+			MessageDefinition[] messages,
+			string[] enumTypes, 
+			CustomSerializer[] customSerializers)
+		{
+			writer(string.Format("\t{0}.WriteInt({1}.{2});", localEncoderName, fieldName, lengthPropertyName));
+			writer(string.Format("\tfor (var i = 0; i < {0}.{1}; ++i)", fieldName, lengthPropertyName));
 			writer("\t{");
-			writer(string.Format("\t\t{0};", TypeToWriter(elementType(type), propertyName + "[i]", localEncoderName)));
+			writer(string.Format("\t\t{0};", TypeToWriter(elementType, fieldName + "[i]", localEncoderName, messages, enumTypes, customSerializers)));
 			writer("\t}");
 		}
 
-		static void ReadCollection(Action<string> writer, Type type, string localDecoderName, Func<string, string, string> addToCollection, Func<Type, string, string> collectionConstructor, Func<Type, Type> elementType)
+		static void ReadCollection(
+			Action<string> writer, 
+			string type, 
+			string localDecoderName, 
+			Func<string, string, string> addToCollection, 
+			Func<string, string, string> collectionConstructor, 
+			string elementType, 
+			MessageDefinition[] messages,
+			string[] enumTypes, 
+			CustomSerializer[] customSerializers)
 		{
 			writer(string.Format("\tvar length = {0}.ReadInt();", localDecoderName));
 			writer(string.Format("\tvar collection = {0};", collectionConstructor(type, "length")));
 			writer("\tfor (var i = 0; i < length; ++i)");
 			writer("\t{");
-			writer(string.Format("\t\tcollection{0};", addToCollection("i", TypeToReader(elementType(type), localDecoderName))));
+			writer(string.Format("\t\tcollection{0};", addToCollection("i", TypeToReader(elementType, localDecoderName, messages, enumTypes, customSerializers))));
 			writer("\t}");
 		}
 	}

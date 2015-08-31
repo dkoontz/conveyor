@@ -59,7 +59,6 @@ namespace Conveyor
 
 		public NetworkConnection(bool useDefaults, Action<LogType, string> logger)
 		{
-			CheckMessageIds();
 			this.logger = logger;
 
 			logger(LogType.Info, "Creating new network");
@@ -285,16 +284,16 @@ namespace Conveyor
 				},
 				ClientFailedToAuthenticate = conn => {},
 				ServerHasAvailablePlayerSlots = conn => Connections.Count(c => c.Status == ConnectionStatus.Joined) < MaxPlayerSlots,
-				IsAuthenticationRequest = (conn, msg) => msg.Id == ClientToServerMessages.Login,
+				IsAuthenticationRequest = (conn, msg) => msg.Id == BuiltInClientToServerMessages.Login,
 				IsValidAuthentication = (conn, msg) => (msg.Data as LoginMessage).Authentication == Password,
 				MaxAuthorizationAttemptsExceeded = conn => false,
-				CreateMalformedMessageMessage = (conn, id) => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
-				CreateUnknownMessageMessage = (conn, id) => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
-				CreateServerFullMessage = (conn, msg) => new Message(ServerToClientMessages.ServerFull, null),
-				CreateAuthenticationRequiredMessage = (conn, msg) => new Message(ServerToClientMessages.AuthenticationRequired, null),
-				CreateInvalidAuthenticationMessage = (conn, msg) => new Message(ServerToClientMessages.InvalidAuthentication, null),
-				CreateJoinedServerMessage = (conn, msg) => new Message(ServerToClientMessages.JoinedServer, new JoinedServerMessage(null)),
-				CreateConnectedMessage = (conn, msg) => new Message(ServerToClientMessages.Connected, new ConnectedMessage(conn.Id)),
+				CreateMalformedMessageMessage = (conn, id) => new Message(BuiltInServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
+				CreateUnknownMessageMessage = (conn, id) => new Message(BuiltInServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
+				CreateServerFullMessage = (conn, msg) => new Message(BuiltInServerToClientMessages.ServerFull, null),
+				CreateAuthenticationRequiredMessage = (conn, msg) => new Message(BuiltInServerToClientMessages.AuthenticationRequired, null),
+				CreateInvalidAuthenticationMessage = (conn, msg) => new Message(BuiltInServerToClientMessages.InvalidAuthentication, null),
+				CreateJoinedServerMessage = (conn, msg) => new Message(BuiltInServerToClientMessages.JoinedServer, new JoinedServerMessage(null)),
+				CreateConnectedMessage = (conn, msg) => new Message(BuiltInServerToClientMessages.Connected, new ConnectedMessage(conn.Id)),
 				MessageHandlerIsNotRegistered = id => logger(LogType.Error, "No handler registered for message: " + id),
 				MessageSerializerIsNotRegistered = id => logger(LogType.Error, "No serializer registered for message: " + id),
 			};
@@ -308,8 +307,8 @@ namespace Conveyor
 				ConnectionRefusedByServer = endpoint => logger(LogType.Warning, "Connected refused by server: " + endpoint.Address + ":" + endpoint.Port),
 				FailedToConnectToServer = endpoint => logger(LogType.Warning, "Failed to connect to server: " + endpoint.Address + ":" + endpoint.Port),
 				LostConnectionToServer = endpoint => logger(LogType.Info, "Lost connection to server: " + endpoint.Address),
-				CreateMalformedMessageMessage = id => new Message(ServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
-				CreateUnknownMessageMessage = id => new Message(ServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
+				CreateMalformedMessageMessage = id => new Message(BuiltInServerToClientMessages.MalformedMessage, new MalformedMessageMessage(id)),
+				CreateUnknownMessageMessage = id => new Message(BuiltInServerToClientMessages.UnknownMessage, new UnknownMessageMessage(id)),
 				MessageHandlerIsNotRegistered = id => logger(LogType.Error, "No handler registered for message: " + id),
 				MessageSerializerIsNotRegistered = id => logger(LogType.Error, "No serializer registered for message: " + id),
 			};
@@ -325,47 +324,24 @@ namespace Conveyor
 			return new List<ClientMessageHandler>
 			{
 				new ClientMessageHandler(
-					ServerToClientMessages.JoinedServer, 
+					BuiltInServerToClientMessages.JoinedServer, 
 					msg => logger(LogType.Info, "Joined server")),
 				new ClientMessageHandler(
-					ServerToClientMessages.ServerFull,
+					BuiltInServerToClientMessages.ServerFull,
 					msg => logger(LogType.Info, "Server is Full")),
 				new ClientMessageHandler(
-					ServerToClientMessages.AuthenticationRequired,
+					BuiltInServerToClientMessages.AuthenticationRequired,
 					msg => logger(LogType.Info, "Authentication required")),
 				new ClientMessageHandler(
-					ServerToClientMessages.InvalidAuthentication,
+					BuiltInServerToClientMessages.InvalidAuthentication,
 					msg => logger(LogType.Info, "Invalid authentication")),
 				new ClientMessageHandler(
-					ServerToClientMessages.MalformedMessage,
+					BuiltInServerToClientMessages.MalformedMessage,
 					msg => logger(LogType.Error, string.Format("Server received message with id: {0} that was malformed", (msg.Data as MalformedMessageMessage).MessageId))),
 				new ClientMessageHandler(
-					ServerToClientMessages.UnknownMessage,
+					BuiltInServerToClientMessages.UnknownMessage,
 					msg => logger(LogType.Error, string.Format("Server received message with id: {0} that was unknown", (msg.Data as UnknownMessageMessage).MessageId))),
 			};
-		}
-
-		static void CheckMessageIds()
-		{
-			var serverToClientIds = MessageUtils.ValidateFields(typeof(ServerToClientMessages));
-			if (serverToClientIds is string)
-			{
-				throw new InvalidProgramException(serverToClientIds as string);
-			}
-			else
-			{
-				ServerToClientMessages.ValidIds = serverToClientIds as HashSet<int>;
-			}
-
-			var clientToServerIds = MessageUtils.ValidateFields(typeof(ClientToServerMessages));
-			if (clientToServerIds is string)
-			{
-				throw new InvalidProgramException(clientToServerIds as string);
-			}
-			else
-			{
-				ClientToServerMessages.ValidIds = clientToServerIds as HashSet<int>;
-			}
 		}
 	}
 }

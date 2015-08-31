@@ -14,48 +14,52 @@ namespace Conveyor
 				return new Dictionary<int, MessageSerializers>
 				{
 					{
-						ServerToClientMessages.UnknownMessage,
-						new MessageSerializers(UnknownMessageMessage.Serialize, UnknownMessageMessage.Deserialize)
+						BuiltInServerToClientMessages.UnknownMessage,
+						UnknownMessageMessage.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.MalformedMessage,
-						new MessageSerializers(MalformedMessageMessage.Serialize, MalformedMessageMessage.Deserialize)
+						(ushort)BuiltInServerToClientMessages.MalformedMessage,
+						MalformedMessageMessage.Serializers
 					},
 					{ 
-						(ushort)ServerToClientMessages.ServerConfiguration, 
-						new MessageSerializers(ServerConfigurationMessage.Serialize, ServerConfigurationMessage.Deserialize)
+						(ushort)BuiltInServerToClientMessages.ServerConfiguration, 
+						ServerConfigurationMessage.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.ServerFull,
+						(ushort)BuiltInServerToClientMessages.ServerFull,
 						EmptyMessageSerializer.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.AuthenticationRequired,
+						(ushort)BuiltInServerToClientMessages.AuthenticationRequired,
 						EmptyMessageSerializer.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.InvalidAuthentication,
+						(ushort)BuiltInServerToClientMessages.InvalidAuthentication,
 						EmptyMessageSerializer.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.Connected,
-						new MessageSerializers(ConnectedMessage.Serialize, ConnectedMessage.Deserialize)
+						(ushort)BuiltInServerToClientMessages.Connected,
+						ConnectedMessage.Serializers
 					},
 					{
-						(ushort)ServerToClientMessages.JoinedServer,
-						new MessageSerializers(JoinedServerMessage.Serialize, JoinedServerMessage.Deserialize)
+						(ushort)BuiltInServerToClientMessages.JoinedServer,
+						JoinedServerMessage.Serializers
 					},
 					{
-						(ushort)ClientToServerMessages.GetServerConfiguration,
+						(ushort)BuiltInClientToServerMessages.GetServerConfiguration,
 						EmptyMessageSerializer.Serializers
 					},
 					{
-						(ushort)ClientToServerMessages.Login,
-						new MessageSerializers(LoginMessage.Serialize, LoginMessage.Deserialize)
+						(ushort)BuiltInClientToServerMessages.Login,
+						LoginMessage.Serializers
 					},
 					{
-						(ushort)ClientToServerMessages.Reconnect,
-						new MessageSerializers(ReconnectMessage.Serialize, ReconnectMessage.Deserialize)
+						(ushort)BuiltInClientToServerMessages.Reconnect,
+						ReconnectMessage.Serializers
+					},
+					{
+						(ushort)BuiltInClientToServerMessages.Disconnect,
+						EmptyMessageSerializer.Serializers
 					},
 				};
 			}

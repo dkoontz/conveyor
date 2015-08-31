@@ -61,7 +61,7 @@ namespace Conveyor
 			{
 				deserializedMessage = new DeserializedMessage
 				{
-					Id = ServerToClientMessages.InvalidMessage,
+					Id = BuiltInServerToClientMessages.InvalidMessage,
 					OriginalId = id,
 					Data = null
 				};

@@ -106,7 +106,7 @@ namespace Conveyor
 						serverConnection = new Connection();
 						idToUdp[serverConnection.Id] = null;
 						functions.ClientConnected(serverConnection);
-						ProcessClientJoining(serverConnection, new Message(ClientToServerMessages.Login, null));
+						ProcessClientJoining(serverConnection, new Message(BuiltInClientToServerMessages.Login, null));
 						break;
 					case UdpEventType.SocketStartupFailed:
 						logger(LogType.Error, "Socket failed to start");
@@ -133,7 +133,7 @@ namespace Conveyor
 							{
 								logger(LogType.Info, "Auto joining client");
 
-								ProcessClientJoiningIfOpenSlots(connection, new Message(ClientToServerMessages.Login, null));
+								ProcessClientJoiningIfOpenSlots(connection, new Message(BuiltInClientToServerMessages.Login, null));
 							}
 						}
 
@@ -175,7 +175,7 @@ namespace Conveyor
 
 							var deserializedMessage = (DeserializedMessage)evt.Object;
 
-							if (deserializedMessage.Id == ServerToClientMessages.InvalidMessage)
+							if (deserializedMessage.Id == BuiltInServerToClientMessages.InvalidMessage)
 							{
 								SendUnknownMessage(connection, deserializedMessage.OriginalId);
 							}
@@ -192,7 +192,7 @@ namespace Conveyor
 										Data = deserializedMessage.Data.Value
 									};
 
-								if (message.Id == ClientToServerMessages.Reconnect)
+								if (message.Id == BuiltInClientToServerMessages.Reconnect)
 								{
 									var data = (ReconnectMessage)message.Data;
 									var oldConnection = disconnectedClients.Keys.FirstOrDefault(c => c.Id == data.OriginalId);
@@ -209,7 +209,7 @@ namespace Conveyor
 										functions.ClientReconnected(oldConnection);
 									}
 								}
-								else if (message.Id == ClientToServerMessages.Disconnect)
+								else if (message.Id == BuiltInClientToServerMessages.Disconnect)
 								{
 									disconnectedClients.Add(connection, connection.Status);
 									connection.Status = ConnectionStatus.Disconnected;
